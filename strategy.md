@@ -2,11 +2,9 @@ Write up a strategy for writing a Reference Based PCR Duplicate Removal tool. Th
 
 - Define the problem:
     * We need to identify and remove PCR duplicates created during the laboratory process so we retain only the original copies. The input will be a sam file of mapped reads and the output will be a file with only a single copy of each read. 
+
 - Write examples:
-    - Include a properly formatted input sam file (an example sam file is included in the repo for your reference)
-    - Include a properly formatted expected output sam file
-    - Cover several different cases of things that are and are not PCR duplicates
-    - It may be helpful to create a "unit test folder", that contains it's own readme.md describing the test cases in your unit test samfile
+    * see unit_test file
 
 - Develop your algorithm using pseudocode:
 
@@ -30,7 +28,7 @@ Write up a strategy for writing a Reference Based PCR Duplicate Removal tool. Th
                             * adjustS="##"
                             * start_position in current_spec=LM_position-adjustS
                         * if cigar from current_spec ends with "##s":
-                            * ?
+                            * continue
                         * if "s' not in cigar from current_spec:
                             * continue
                     * if bitwise_revcomp applied to strand in current_spec = true:
@@ -38,7 +36,8 @@ Write up a strategy for writing a Reference Based PCR Duplicate Removal tool. Th
                             * adjustS="##"
                             * start_position in current_spec=adjustS+LM_position
                         * if cigar from current_spec ends with "##s":
-                            * continue
+                            * adjustS="##"
+                            * start position in current_spec=adjustS+LM_position
                         * if "s' not in cigar from current_spec:
                             * adjustM= ## before m
                             * start_position in current_spec = adjustM + LM_position
@@ -76,7 +75,3 @@ def bitwise_revcomp:
 
 assert strand_function("")
 assert bitwise_revcom("")
-
-
-
-For this portion of the assignment, you should design your algorithm for single-end data, with 96 known UMIs. A list of UMIs can also be found in the repo. UMI information will be in the QNAME, like so: NS500451:154:HWKTMBGXX:1:11101:15364:1139:GAACAGGT. Discard any UMIs with errors (or error correct, if you're feeling ambitious).
