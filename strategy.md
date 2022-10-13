@@ -9,7 +9,7 @@ Write up a strategy for writing a Reference Based PCR Duplicate Removal tool. Th
 - Develop your algorithm using pseudocode:
 
 * create UMI_list from provided UMI file
-* create empty array (final_list): will hold UMI, position, chrom, strand for each read and will compare future reads for duplicates
+* create empty dictionary (final_list): {()} will hold UMI, position, chrom, strand for each read and will compare future reads for duplicates, don't need value
 * create temporary array (current_spec): will hold current UMI, position, chrom, strand
 * with open sam file:
     * if line starts with "@" (sam file header):
@@ -19,9 +19,9 @@ Write up a strategy for writing a Reference Based PCR Duplicate Removal tool. Th
             * break
         * else:
             * current_line = entire read
-            * UMI = column1, awk statement to find 8th item separated by :
+            * UMI = line (column0) split(":") [7]
             * current_spec = [read's UMI, strand (column2), chromosome(column3), LM_position(column4), cigar(column6), start_position=LM_position]
-            * if UMI in current_spec array is in UMI_list:
+            * if UMI in current_spec is in UMI_list:
                 * if strand_function applied to strand in current_spec = mapped:
                     * if bitwise_revcomp = false:
                         * if cigar from current_spec starts with "##s":
@@ -33,14 +33,19 @@ Write up a strategy for writing a Reference Based PCR Duplicate Removal tool. Th
                             * continue
                     * if bitwise_revcomp applied to strand in current_spec = true:
                         * if cigar from current_spec starts with "##s":
-                            * adjustS="##"
-                            * start_position in current_spec=adjustS+LM_position
+                            * continue
                         * if cigar from current_spec ends with "##s":
                             * adjustS="##"
                             * start position in current_spec=adjustS+LM_position
                         * if "s' not in cigar from current_spec:
-                            * adjustM= ## before m
+                            * adjustM= ## before M
                             * start_position in current_spec = adjustM + LM_position
+                        * if cigar from current_spec has "N":
+                            * adjustN= ## before N
+                            * start_position in current_spec = adjustN + LM_position
+                        * if cigar from current_spec has "D":
+                            * adjustD= ## before D
+                            * start_position in current_spec = adjustD + LM_position
                 * is UMI, start_position, chrom, strand in final array?
                     * if yes:
                         * empty current_line and current_spec
@@ -61,17 +66,10 @@ Write up a strategy for writing a Reference Based PCR Duplicate Removal tool. Th
 
 def strand_function:
     "determine if bitwise flag in sam file indicates read is mapped (true) or unmapped (false)"
-    if ((flag & 4) == 4):
-        mapped = false
-        return 'unmapped'
-    if ((flag & 4) != 4):
-        mapped = true
-        return 'mapped'
+        return mapped
+assert strand_function("4")==unmapped
+
 def bitwise_revcomp:
     "determine if bitwise flag in sam file indicates read is reverse complement"
-    if ((flag & 16) == 16): 
-    rev_comp = true
-    return 'true'
-
-assert strand_function("")
-assert bitwise_revcom("")
+    return true
+assert bitwise_revcom("16")==true
