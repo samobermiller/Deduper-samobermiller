@@ -1,12 +1,11 @@
 #!/usr/bin/env python
 import argparse
 def get_args():
-    parser = argparse.ArgumentParser(description="a program for kmer")
+    parser = argparse.ArgumentParser(description="deduper")
     parser.add_argument("-f", "--file", help="designates absolute file path to sorted sam file")
     parser.add_argument("-u", "--umi", help="designates file containing the list of UMIs")
     parser.add_argument("-o", "--outfile", help="designates absolute file path to sorted sam file")
-    #add -h help
-    #parser.add_argument("-h", "--help", help="prints a USEFUL help message (see argparse docs)")
+    parser.add_argument("-h", "--help", required=False, help="code written for single end reads and assumes a known list of UMIs is available. First read written to file if duplicates. Code does not address UMI error")
     return parser.parse_args()
 import bioinfo
 import re
@@ -21,14 +20,21 @@ with open(args.umi, "r") as umi_list:
         known_umi_list.append(line.strip())
 #print(len(known_umi_list))
 
-final_list={}
-
-# create temporary array (current_spec): will hold current UMI, position, chrom, strand
+final_dict={}
 current_spec=[]
+header_count=0
+uniq_reads=0
+wrong_umi=0
+dup_count=0
+countperchrom=0
+chrom_dict={}
 with open(args.file, "r") as sam:
+    #print("current list:")
     for line in sam:
-        if line.startswith('@HD') or line.startswith('@PG') or line.startswith('@SQ'):
+        if line.startswith("@"):
+        # if line.startswith('@HD') or line.startswith('@PG') or line.startswith('@SQ'):
             #print(line)
+            header_count+=1
             outsam.write(line)
             #write header to sam file
         else:
@@ -56,8 +62,9 @@ with open(args.file, "r") as sam:
                 if bioinfo.flag_revcomp(strand) == 'forward':
                     #if strand is forward
                     #print(current_spec)
-                    if re.match(r'^([0-9]|[1-9][0-9]|100)S.*', cigar):
-                    #print(cigar)
+                    if re.match(r'^(\d+)S.*', cigar):
+                        #print('beginning S')
+                        #print(cigar)
                     #if S at begining of cigar
                         start_softclip=cigar.split('S')
                         #adjustS="##"
@@ -71,10 +78,11 @@ with open(args.file, "r") as sam:
                 if bioinfo.flag_revcomp(strand) == 'reverse':
                 #if strand is reverse
                     #print(current_spec)
-                    if re.match(r'.*([0-9]|[1-9][0-9]|100)S$', cigar):
+                    if re.match(r'.*(\d+)S$', cigar):
                     #if cigar from current_spec ends with "##s":
+                        #print('end S')
                         #print(cigar)
-                        end_softclip=re.findall(r'.*([0-9]|[1-9][0-9]|100)S$', cigar)
+                        end_softclip=re.findall(r'.*(\d+)S$', cigar)
                         #adjustS="##"
                         #print(end_softclip)
                         #print(end_softclip[0])
@@ -83,85 +91,73 @@ with open(args.file, "r") as sam:
                         current_spec[5]=start
                         #start position in current_spec=adjustS+LM_position
                 #print(current_spec)
-                    if re.findall(r'([0-9]|[1-9][0-9]|100)M.*', cigar):
+                    for letter in re.findall(r'(\d+)(M{1})', cigar):
                         #if "s' not in cigar from current_spec:
-                        match=re.findall(r'([0-9]|[1-9][0-9]|100)M.*', cigar)
+                        #print('if M')
+                        #print(cigar)
+                        match=letter
                         #print(match)
                         match_adjust=int(match[0])
                         #print(match_adjust)
-                        start=match_adjust+start
+                        start+=match_adjust
+                        #print(start)
                         current_spec[5]=start
                         #print(current_spec)
                         #start_position in current_spec = adjustM + LM_position
-                    if re.findall(r'([0-9]|[1-9][0-9]|100)N.*', cigar):
+                    #print(current_spec)
+                    for letter in re.findall(r'(\d+)(N{1})', cigar):
                         #if cigar from current_spec has "N":
-                        N_value=re.findall(r'([0-9]|[1-9][0-9]|100)N.*', cigar)
+                        #print('if N')
+                        #print(cigar)
+                        N_value=letter
                         #print(N_value)
                         adjust_N=int(N_value[0])
                         start=adjust_N+start
                         current_spec[5]=start
                         #start_position in current_spec = adjustN + LM_position
                         #print(current_spec)
-                    if re.findall(r'([0-9]|[1-9][0-9]|100)D.*', cigar):
-                        D_value=re.findall(r'([0-9]|[1-9][0-9]|100)D.*', cigar)
+                    for letter in re.findall(r'(\d+)(D{1})', cigar):
+                        #print('if D')
+                        #print(cigar)
+                        D_value=letter
                         adjust_D=int(D_value[0])
                         start=adjust_D+start
                         current_spec[5]=start
                         #print(current_spec)
                         #start_position in current_spec = adjustD + LM_position
+                current_spec[5]=current_spec[5]-1
+                current_spec=(current_spec[0],current_spec[1],current_spec[2],current_spec[5])
                 #print(current_spec)
-                finaldict_empty=not bool(final_list)
-                if finaldict_empty == True:
-                    #print("first entry")
-                    final_list=[current_spec[0], current_spec[1], current_spec[2], current_spec[5]]
+                if current_spec not in final_dict:
+                    uniq_reads+=1
+                    final_dict[current_spec] = 1
+                    #print("new umi")
                     #print(final_list)
-                if finaldict_empty == False:
-                    for item in final_list:
-                        if current_spec[0] != final_list[0]:
-                            final_list[].append(current_spec[0],current_spec[1],current_spec[2],current_spec[5])
-                            #print("new umi")
-                            #print(final_list)
-                            current_spec=[]
-                            break
-                        else:
-                            if current_spec[1] != final_list[1]:
-                                final_list=[current_spec[0],current_spec[1],current_spec[2],current_spec[5]]
-                                #print("new position")
-                                #print(final_list)
-                                current_spec=[]
-                                break
-                            else:
-                                if current_spec[2] != final_list[2]:
-                                    final_list=[current_spec[0],current_spec[1],current_spec[2],current_spec[5]]
-                                    #print("new chrom")
-                                    #print(final_list)
-                                    current_spec=[]
-                                    break
-                                else:
-                                    if current_spec[5] != final_list[3]:
-                                        final_list=[current_spec[0],current_spec[1],current_spec[2],current_spec[5]]
-                                        #print("new strand")
-                                        #print(final_list)
-                                        current_spec=[]
-                                        break
-                                    else:
-                                        #print("copy")
-                                        current_spec=[]
-                                        break
-    #print(final_list)
-
-            #             print(final_list)
-            #     * is UMI, start_position, chrom, strand in final array?
-            #         * if yes:
-            #             * empty current_line and current_spec
-            #             * break
-            #         * if no:
-            #             * add info from current_spec to final array
-            #             * write entire line from current_line to final sam file
-            #             * empty current_line and current_spec
-            #             * break
-            # if UMI in current_spec array not in UMI_list:
-            #   empty current_line and current_spec
-
-
-            # current code assuming we writes adjusted position to final sam file
+                    if current_spec[2] in chrom_dict:
+                        chrom_dict[current_spec[2]]+=1
+                    else:
+                        chrom_dict[current_spec[2]]=1
+                    outsam.write(current_line)
+                    current_spec=[]
+                    continue
+                else:
+                    #print("copy")
+                    final_dict[current_spec] += 1
+                    dup_count+=1
+                    current_spec=[]
+                    continue
+            else:
+                wrong_umi+=1
+with open("./requirements.txt", "w") as r:
+    r.write("# header lines:"+'\n')
+    r.write(str(header_count)+'\n')
+    r.write("# uniq reads:"+'\n')
+    r.write(str(uniq_reads)+'\n')
+    r.write("# wrong UMIs"+'\n')
+    r.write(str(wrong_umi)+'\n')
+    r.write("# dups removed"+'\n')
+    r.write(str(dup_count)+'\n')
+    r.write("reads per chrom:"+'\n')
+    for key, value in chrom_dict.items():
+        count=f'{key}\t{value}\n'
+        r.write(str(count))
