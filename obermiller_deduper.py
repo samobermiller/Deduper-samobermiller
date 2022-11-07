@@ -1,13 +1,20 @@
 #!/usr/bin/env python
 import argparse
 def get_args():
-    parser = argparse.ArgumentParser(description="deduper")
+    parser = argparse.ArgumentParser(description="Use sorted and uniquely mapped sam files. code written for single end reads and assumes a known list of UMIs is available. First read written to file if duplicates. Code does not address UMI error")
     parser.add_argument("-f", "--file", help="designates absolute file path to sorted sam file")
     parser.add_argument("-u", "--umi", help="designates file containing the list of UMIs")
     parser.add_argument("-o", "--outfile", help="designates absolute file path to sorted sam file")
-    parser.add_argument("-h", "--help", required=False, help="code written for single end reads and assumes a known list of UMIs is available. First read written to file if duplicates. Code does not address UMI error")
+    #parser.add_argument("-h", "--help", required=False, help="sorted and uniquely mapped sam files. code written for single end reads and assumes a known list of UMIs is available. First read written to file if duplicates. Code does not address UMI error")
     return parser.parse_args()
-import bioinfo
+#print("yes i print")
+def flag_revcomp(strand):
+    "determine if bitwise flag in sam file indicates read is reverse complement"
+    if ((strand & 16) == 16):
+        rev_comp = "reverse"
+    else:
+        rev_comp = "forward"
+    return rev_comp
 import re
 args=get_args()
 #/Users/samobermiller/bioinfo/Bi624/Deduper-samobermiller/obermiller_deduper.py -u /Users/samobermiller/bioinfo/Bi624/Deduper-samobermiller/unit_test/STL96.txt -f /Users/samobermiller/bioinfo/Bi624/Deduper-samobermiller/unit_test/test.sam -o /Users/samobermiller/bioinfo/Bi624/Deduper-samobermiller/practice_output/practice.sam
@@ -40,7 +47,9 @@ with open(args.file, "r") as sam:
         else:
             current_line = line
             #print(current_line)
-            elements=line.split('\t')
+            current_line=current_line.strip('\n')
+            elements=current_line.split('\t')
+            #elements=line.strip('\n')
             #print(elements)
             qname=elements[0].split(':')
             #print(qname)
@@ -55,45 +64,46 @@ with open(args.file, "r") as sam:
             #print(cigar)
             start=int(LM)
             current_spec=[umi, strand, chromosome, LM, cigar, start]
-            #print(current_spec)
+            #print(cigar)
             #current_spec = [read's UMI, strand (column2), chromosome(column3), LM_position(column4), cigar(column6), start_position=LM_position]
             if umi in known_umi_list:
                 #print(umi)
-                if bioinfo.flag_revcomp(strand) == 'forward':
+                if flag_revcomp(strand) == 'forward':
                     #if strand is forward
-                    #print(current_spec)
+                    #print("forward")
                     if re.match(r'^(\d+)S.*', cigar):
-                        #print('beginning S')
+                        #print('left soft clipped')
                         #print(cigar)
                     #if S at begining of cigar
                         start_softclip=cigar.split('S')
                         #adjustS="##"
                         start_adjustS=int(start_softclip[0])
-                        #print(adjustS)
+                        #print(start_adjustS)
                         start=start-start_adjustS
                         #print(start)
                         current_spec[5]=start
                         #print(current_spec)
                 #print(current_spec)
-                if bioinfo.flag_revcomp(strand) == 'reverse':
+                if flag_revcomp(strand) == 'reverse':
                 #if strand is reverse
-                    #print(current_spec)
+                    #print("reverse")
                     if re.match(r'.*(\d+)S$', cigar):
                     #if cigar from current_spec ends with "##s":
-                        #print('end S')
-                        #print(cigar)
+                        #print("right soft clipped")
                         end_softclip=re.findall(r'.*(\d+)S$', cigar)
                         #adjustS="##"
                         #print(end_softclip)
                         #print(end_softclip[0])
                         end_adjustS=int(end_softclip[0])
+                        #print(end_adjustS)
                         start=end_adjustS+start
                         current_spec[5]=start
+                        #print(start)
                         #start position in current_spec=adjustS+LM_position
                 #print(current_spec)
                     for letter in re.findall(r'(\d+)(M{1})', cigar):
                         #if "s' not in cigar from current_spec:
-                        #print('if M')
+                        #print('M present')
                         #print(cigar)
                         match=letter
                         #print(match)
@@ -107,47 +117,54 @@ with open(args.file, "r") as sam:
                     #print(current_spec)
                     for letter in re.findall(r'(\d+)(N{1})', cigar):
                         #if cigar from current_spec has "N":
-                        #print('if N')
+                        #print('N present')
                         #print(cigar)
                         N_value=letter
                         #print(N_value)
                         adjust_N=int(N_value[0])
+                        #print(adjust_N)
                         start=adjust_N+start
+                        #print(start)
                         current_spec[5]=start
                         #start_position in current_spec = adjustN + LM_position
                         #print(current_spec)
                     for letter in re.findall(r'(\d+)(D{1})', cigar):
-                        #print('if D')
+                        #print("D present")
                         #print(cigar)
                         D_value=letter
                         adjust_D=int(D_value[0])
+                        #print(adjust_D)
                         start=adjust_D+start
+                        #print(start)
                         current_spec[5]=start
                         #print(current_spec)
                         #start_position in current_spec = adjustD + LM_position
-                current_spec[5]=current_spec[5]-1
+                #print(current_spec[5])
+                #current_spec[5]=current_spec[5]-1
                 current_spec=(current_spec[0],current_spec[1],current_spec[2],current_spec[5])
                 #print(current_spec)
                 if current_spec not in final_dict:
                     uniq_reads+=1
                     final_dict[current_spec] = 1
-                    #print("new umi")
+                    #print("new umi in final dict")
                     #print(final_list)
                     if current_spec[2] in chrom_dict:
                         chrom_dict[current_spec[2]]+=1
                     else:
                         chrom_dict[current_spec[2]]=1
-                    outsam.write(current_line)
+                    outsam.write(current_line+'\n')
                     current_spec=[]
                     continue
                 else:
-                    #print("copy")
+                    #print("duplicate found")
                     final_dict[current_spec] += 1
                     dup_count+=1
                     current_spec=[]
                     continue
             else:
                 wrong_umi+=1
+                #print("umi not in known list")
+                        #print("yes")
 with open("./requirements.txt", "w") as r:
     r.write("# header lines:"+'\n')
     r.write(str(header_count)+'\n')
